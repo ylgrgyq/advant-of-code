@@ -17,5 +17,8 @@ name = 'day3'
 [[bin]]
 name = 'day4'
 
+[[bin]]
+name = 'day5'
+
 [dependencies]
 md5 = "0.7.0"
