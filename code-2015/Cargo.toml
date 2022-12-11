@@ -29,6 +29,9 @@ name = 'day7'
 [[bin]]
 name = 'day8'
 
+[[bin]]
+name = 'day9'
+
 [dependencies]
 md5 = "0.7.0"
 regex = "1.7.0"

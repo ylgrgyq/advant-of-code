@@ -181,6 +181,7 @@ impl Circuit {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
