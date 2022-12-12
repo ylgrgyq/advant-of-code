@@ -1,4 +1,9 @@
-use std::{collections::HashMap, error, io, str::FromStr, vec};
+use std::{
+    collections::{HashMap, HashSet},
+    error, io,
+    str::FromStr,
+    vec,
+};
 
 fn main() -> io::Result<()> {
     match io::stdin().lines().collect::<Result<Vec<String>, _>>() {
@@ -11,7 +16,7 @@ fn main() -> io::Result<()> {
             println!("shortest: {}", m.shortest_route());
             println!("longest: {}", m.longest_route());
         }
-        Err(e) => println!("parse instructions failed. {}", e),
+        Err(e) => println!("parse route failed. {}", e),
     }
     Ok(())
 }
@@ -60,13 +65,10 @@ impl FromStr for Route {
         return regex::Regex::new(r"^(\w+) to (\w+) = (\d+)$")
             .ok()
             .and_then(|re: regex::Regex| -> Option<Route> {
-                println!("xz11 {:?}", re.captures(s));
                 return re.captures(s).and_then(|c| {
                     if c.len() < 4 {
-                        println!("Asdfasdfsdf {}", c.len());
                         return None;
                     }
-                    println!("asdfasd {} {} {}", &c[1], &c[2], &c[3]);
                     return c[1].parse::<Location>().ok().and_then(|from| {
                         c[2].parse::<Location>().ok().and_then(|to| {
                             c[3].parse::<u32>()
@@ -82,42 +84,42 @@ impl FromStr for Route {
 
 struct Map {
     route_distances: HashMap<Location, HashMap<Location, u32>>,
+    locations: Vec<Location>,
 }
 
 impl Map {
     fn new(routes: Vec<Route>) -> Map {
         let mut route_distances: HashMap<Location, HashMap<Location, u32>> = HashMap::new();
 
+        let mut locations = HashSet::new();
         for r in routes {
-            if !route_distances.contains_key(&r.from) {
-                route_distances.insert(r.from.clone(), HashMap::new());
-            }
-
-            route_distances
-                .get_mut(&r.from)
-                .unwrap()
-                .insert(r.to.clone(), r.distance);
-
-            if !route_distances.contains_key(&r.to) {
-                route_distances.insert(r.to.clone(), HashMap::new());
-            }
-
-            route_distances
-                .get_mut(&r.to)
-                .unwrap()
-                .insert(r.from.clone(), r.distance);
+            locations.insert(r.from.clone());
+            locations.insert(r.to.clone());
+            record_route_distance(&mut route_distances, &r.from, &r.to, r.distance);
+            record_route_distance(&mut route_distances, &r.to, &r.from, r.distance);
         }
-        return Map { route_distances };
+        return Map {
+            route_distances,
+            locations: locations.into_iter().collect(),
+        };
     }
 
     fn shortest_route(&self) -> u32 {
-        return route_permutation(locations())
+        if self.locations.len() == 2 {
+            return self
+                .route_distances
+                .get(&self.locations[0])
+                .unwrap()
+                .get(&self.locations[1])
+                .unwrap()
+                .clone();
+        }
+        return route_permutation(self.locations.clone())
             .iter()
             .map(|routes| -> u32 {
                 return routes
                     .iter()
                     .zip(routes.iter().skip(1))
-                    .inspect(|(a, b)| println!("sdf {:?} {:?}", *a, *b))
                     .map(|(from, to)| self.route_distances.get(from).unwrap().get(to).unwrap())
                     .sum();
             })
@@ -126,7 +128,7 @@ impl Map {
     }
 
     fn longest_route(&self) -> u32 {
-        return route_permutation(locations())
+        return route_permutation(self.locations.clone())
             .iter()
             .map(|routes| -> u32 {
                 return routes
@@ -140,17 +142,20 @@ impl Map {
     }
 }
 
-fn locations() -> Vec<Location> {
-    vec![
-        Location::Tristram,
-        Location::AlphaCentauri,
-        Location::Snowdin,
-        Location::Tambi,
-        Location::Faerun,
-        Location::Norrath,
-        Location::Straylight,
-        Location::Arbre,
-    ]
+fn record_route_distance(
+    route_distances: &mut HashMap<Location, HashMap<Location, u32>>,
+    from: &Location,
+    to: &Location,
+    distance: u32,
+) {
+    if !route_distances.contains_key(&from) {
+        route_distances.insert(from.clone(), HashMap::new());
+    }
+
+    route_distances
+        .get_mut(&from)
+        .unwrap()
+        .insert(to.clone(), distance);
 }
 
 fn route_permutation(locations: Vec<Location>) -> Vec<Vec<Location>> {
@@ -187,23 +192,27 @@ fn route_permutation(locations: Vec<Location>) -> Vec<Vec<Location>> {
 mod tests {
     use super::*;
     #[test]
-    fn test_circuit() {
-        let locations = vec![Location::Tambi, Location::Tristram, Location::AlphaCentauri];
-        let permutations = route_permutation(locations);
-        for p in permutations {
-            println!("{:?}", &p);
-        }
+    fn test_single_route_distance() {
+        let routes = vec!["Tristram to Arbre = 132"]
+            .iter()
+            .map(|s| s.parse::<Route>().unwrap())
+            .collect::<Vec<Route>>();
+        let map = Map::new(routes);
+        assert_eq!(map.shortest_route(), 132);
+        assert_eq!(map.longest_route(), 132);
     }
     #[test]
-    fn test_parse() {
-        let re = regex::Regex::new(r"^(\w+) to (\w+) = (\d+)$").unwrap();
-        let s = "Tristram to Arbre = 132";
-        println!("xz11 {:?}", re.captures(s));
-
-        // println!("asdf {:?}", regex::Regex::new(r"(.*) to (.*) = (\d)?$"));
-        // println!(
-        //     "sdf {:?}",
-        //     "Tristram to AlphaCentauri = 34".parse::<Route>()
-        // );
+    fn test_three_routes_distance() {
+        let routes = vec![
+            "Tristram to Arbre = 132",
+            "Tristram to Faerun = 21",
+            "Arbre to Faerun = 15",
+        ]
+        .iter()
+        .map(|s| s.parse::<Route>().unwrap())
+        .collect::<Vec<Route>>();
+        let map = Map::new(routes);
+        assert_eq!(map.shortest_route(), 36);
+        assert_eq!(map.longest_route(), 153);
     }
 }
